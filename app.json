@@ -3,13 +3,20 @@
     "name": "FitDiaries",
     "slug": "FitDiaries",
     "version": "1.0.0",
+    "scheme": "fitdiaries",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "FitDiaries uses the camera to take weekly progress photos.",
+        "NSPhotoLibraryUsageDescription": "FitDiaries lets you pick a weekly progress photo from your library."
+      }
     },
     "android": {
+      "package": "com.dhruv.fitdiaries",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -20,6 +27,28 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-sqlite",
+      "expo-audio",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "FitDiaries uses the camera to take weekly progress photos."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "FitDiaries lets you pick a weekly progress photo from your library."
+        }
+      ],
+      "expo-notifications",
+      "expo-sharing"
+    ],
+    "experiments": {
+      "typedRoutes": true
     }
   }
 }
