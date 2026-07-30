@@ -46,6 +46,18 @@ export function volumeByMuscle(
   return out;
 }
 
+/** Count of completed working sets (reps logged) grouped by (primary) muscle name. */
+export function setsByMuscle(
+  entries: { reps: number | null; muscle: string }[]
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const e of entries) {
+    if (e.reps == null) continue;
+    out[e.muscle] = (out[e.muscle] ?? 0) + 1;
+  }
+  return out;
+}
+
 export type PRFlags = { heaviest: boolean; oneRm: boolean; repsAtWeight: boolean };
 
 export function anyPR(f: PRFlags): boolean {
