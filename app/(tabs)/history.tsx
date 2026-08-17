@@ -1,9 +1,10 @@
-import { View } from 'react-native';
+import { Alert, Pressable, Text, View } from 'react-native';
 import { router } from 'expo-router';
 
 import { listSessions, type SessionSummary } from '@/db/queries';
 import { useQuery } from '@/db/useQuery';
 import { Badge, Body, Card, Caption, EmptyState, Loading, Row, Screen } from '@/components/ui';
+import { buildWeekText, shareText } from '@/lib/exportWorkout';
 import { compactNumber } from '@/lib/format';
 import { mondayOf, relativeWeekLabel, shortDate, toISODate, weekLabel } from '@/lib/week';
 import { phaseColor, phaseLabel, spacing, useTheme } from '@/theme/theme';
@@ -59,14 +60,30 @@ export default function History() {
 }
 
 function WeekHeader({ group, now }: { group: WeekGroup; now: Date }) {
+  const { colors } = useTheme();
   const relative = relativeWeekLabel(group.monday, now);
   const range = weekLabel(group.monday);
   const count = group.sessions.length;
   const countLabel = `${count} ${count === 1 ? 'workout' : 'workouts'}`;
+
+  const exportWeek = async () => {
+    try {
+      const text = await buildWeekText(group.monday.getTime());
+      await shareText(text, `FitDiaries — week of ${range}`);
+    } catch {
+      Alert.alert('Could not export', 'Something went wrong exporting this week.');
+    }
+  };
+
   return (
     <Row style={{ justifyContent: 'space-between', alignItems: 'baseline', marginTop: spacing(1) }}>
       <Body style={{ fontWeight: '700', fontSize: 16 }}>{relative ?? range}</Body>
-      <Caption>{relative ? `${range} · ${countLabel}` : countLabel}</Caption>
+      <Row style={{ gap: spacing(2), alignItems: 'baseline' }}>
+        <Caption>{relative ? `${range} · ${countLabel}` : countLabel}</Caption>
+        <Pressable onPress={exportWeek} hitSlop={8}>
+          <Text style={{ color: colors.primary, fontSize: 13, fontWeight: '700' }}>Export</Text>
+        </Pressable>
+      </Row>
     </Row>
   );
 }

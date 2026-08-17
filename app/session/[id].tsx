@@ -24,6 +24,7 @@ import {
   Screen,
 } from '@/components/ui';
 import { totalVolume } from '@/lib/metrics';
+import { buildSessionText, shareText } from '@/lib/exportWorkout';
 import { computeAllPREvents } from '@/lib/progress';
 import { PR_LABEL } from '@/lib/metrics';
 import { compactNumber, setLabel } from '@/lib/format';
@@ -126,6 +127,18 @@ export default function SessionDetail() {
       )}
 
       <Divider />
+      <Button
+        title="Share workout"
+        variant="secondary"
+        onPress={async () => {
+          try {
+            const text = await buildSessionText(sessionId);
+            if (text) await shareText(text, `${header.dayName} · ${shortDate(new Date(header.startedAt))}`);
+          } catch (e) {
+            Alert.alert('Could not export', 'Something went wrong exporting this workout.');
+          }
+        }}
+      />
       {!header.finishedAt && (
         <Button title="Resume workout" onPress={() => router.replace(`/workout/${sessionId}`)} />
       )}
