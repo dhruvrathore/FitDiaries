@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import {
   createSessionFromTemplate,
   getSettings,
+  lastBodyWeight,
   listTemplates,
   suggestedTemplateId,
   type TemplateRow,
@@ -12,6 +13,7 @@ import {
 import { useQuery } from '@/db/useQuery';
 import { Badge, Body, Button, Card, Caption, H2, Loading, Row } from '@/components/ui';
 import { Screen } from '@/components/ui';
+import { NumberField } from '@/components/NumberField';
 import { PHASES, phaseColor, phaseLabel, spacing, useTheme, type Phase } from '@/theme/theme';
 import { isDeloadWeek } from '@/lib/week';
 import { Chip } from '@/components/ui';
@@ -19,12 +21,13 @@ import { Chip } from '@/components/ui';
 export default function NewWorkout() {
   const { colors } = useTheme();
   const { data } = useQuery(async () => {
-    const [templates, suggestedId, settings] = await Promise.all([
+    const [templates, suggestedId, settings, lastWeight] = await Promise.all([
       listTemplates(),
       suggestedTemplateId(),
       getSettings(),
+      lastBodyWeight(),
     ]);
-    return { templates, suggestedId, settings };
+    return { templates, suggestedId, settings, lastWeight };
   }, []);
 
   const deload = useMemo(
@@ -34,6 +37,8 @@ export default function NewWorkout() {
 
   const [templateId, setTemplateId] = useState<number | null>(null);
   const [phase, setPhase] = useState<Phase>('hypertrophy');
+  const [bodyWeight, setBodyWeight] = useState<number | null>(null);
+  const [prefilled, setPrefilled] = useState(false);
   const [starting, setStarting] = useState(false);
 
   // Apply suggestions once data arrives.
@@ -45,12 +50,19 @@ export default function NewWorkout() {
   useEffect(() => {
     if (deload) setPhase('deload');
   }, [deload]);
+  // Prefill body weight from the last recorded weigh-in — once, so it stays editable/clearable.
+  useEffect(() => {
+    if (data && !prefilled) {
+      if (data.lastWeight != null) setBodyWeight(data.lastWeight);
+      setPrefilled(true);
+    }
+  }, [data, prefilled]);
 
   if (!data) return <Loading />;
 
   const start = async (tmpl: TemplateRow) => {
     setStarting(true);
-    const id = await createSessionFromTemplate(tmpl, phase);
+    const id = await createSessionFromTemplate(tmpl, phase, bodyWeight);
     router.replace(`/workout/${id}`);
   };
 
@@ -112,6 +124,23 @@ export default function NewWorkout() {
             />
           ))}
         </Row>
+      </View>
+
+      <View style={{ gap: spacing(2) }}>
+        <H2>Body weight</H2>
+        <Card>
+          <NumberField
+            label="Body weight"
+            value={bodyWeight}
+            onCommit={setBodyWeight}
+            allowDecimal
+            step={0.5}
+            suffix="kg"
+          />
+          <Caption style={{ textAlign: 'center', marginTop: spacing(2) }}>
+            Optional — logged with this workout.
+          </Caption>
+        </Card>
       </View>
 
       <Button

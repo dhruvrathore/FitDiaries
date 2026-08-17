@@ -27,7 +27,7 @@ import { totalVolume } from '@/lib/metrics';
 import { buildSessionText, shareText } from '@/lib/exportWorkout';
 import { computeAllPREvents } from '@/lib/progress';
 import { PR_LABEL } from '@/lib/metrics';
-import { compactNumber, setLabel } from '@/lib/format';
+import { compactNumber, kg, setLabel } from '@/lib/format';
 import { shortDate } from '@/lib/week';
 import { phaseColor, phaseLabel, spacing, useTheme } from '@/theme/theme';
 
@@ -68,6 +68,7 @@ export default function SessionDetail() {
           <Badge label={phaseLabel[header.phase]} color={phaseColor[header.phase]} />
         </Row>
         <Caption>{shortDate(new Date(header.startedAt))}</Caption>
+        {header.bodyWeight != null && <Caption>Body weight: {kg(header.bodyWeight)} kg</Caption>}
       </View>
 
       <Card>

@@ -114,6 +114,8 @@ export const sessions = sqliteTable('sessions', {
   startedAt: integer('started_at').notNull(),
   finishedAt: integer('finished_at'),
   notes: text('notes'),
+  /** Body weight in kg, captured at workout start. Nullable — skippable. */
+  bodyWeight: real('body_weight'),
 });
 
 export const sessionExercises = sqliteTable('session_exercises', {
