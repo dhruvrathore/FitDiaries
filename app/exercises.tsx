@@ -33,17 +33,30 @@ export default function Exercises() {
   const { data: muscles } = useQuery(() => listMuscleGroups(), []);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
+  const [search, setSearch] = useState('');
 
   if (!exercises || !muscles) return <Loading />;
 
   const editing = editingId != null ? exercises.find((e) => e.id === editingId) ?? null : null;
 
+  const q = search.trim().toLowerCase();
+  const filtered = q
+    ? exercises.filter(
+        (e) =>
+          e.name.toLowerCase().includes(q) || (e.muscle ?? '').toLowerCase().includes(q)
+      )
+    : exercises;
+
   return (
     <>
       <Screen>
         <Button title="+ New exercise" variant="secondary" onPress={() => setCreating(true)} />
+        <SearchInput value={search} onChangeText={setSearch} />
         <Caption>Tap an exercise to rename it, change its type, muscle, image, or cues.</Caption>
-        {exercises.map((e) => {
+        {filtered.length === 0 && (
+          <Caption>No exercises match “{search.trim()}”.</Caption>
+        )}
+        {filtered.map((e) => {
           const hidden = !e.isActive;
           return (
             <Card key={e.id} onPress={() => setEditingId(e.id)} style={hidden ? { opacity: 0.55 } : undefined}>
@@ -296,6 +309,49 @@ function CreateExercise({
 }
 
 // --- shared bits -------------------------------------------------------------
+function SearchInput({
+  value,
+  onChangeText,
+}: {
+  value: string;
+  onChangeText: (t: string) => void;
+}) {
+  const { colors } = useTheme();
+  return (
+    <View style={{ justifyContent: 'center' }}>
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        placeholder="Search exercises"
+        placeholderTextColor={colors.textFaint}
+        autoCorrect={false}
+        autoCapitalize="none"
+        returnKeyType="search"
+        style={{
+          backgroundColor: colors.card,
+          borderWidth: 1,
+          borderColor: colors.border,
+          borderRadius: radius.md,
+          paddingHorizontal: spacing(3),
+          paddingRight: value ? spacing(9) : spacing(3),
+          paddingVertical: spacing(2.5),
+          color: colors.text,
+          fontSize: font.body,
+        }}
+      />
+      {value ? (
+        <Pressable
+          onPress={() => onChangeText('')}
+          hitSlop={10}
+          style={{ position: 'absolute', right: spacing(3) }}
+        >
+          <Text style={{ color: colors.textFaint, fontSize: 16 }}>✕</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <View style={{ gap: spacing(1.5) }}>
