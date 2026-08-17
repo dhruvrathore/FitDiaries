@@ -117,9 +117,22 @@ export async function createTemplate(name: string): Promise<number> {
   );
   const [row] = await db
     .insert(dayTemplates)
-    .values({ name: name.trim(), rotationOrder: (prev?.n ?? 0) + 1 })
+    .values({ name: await uniqueTemplateName(name.trim()), rotationOrder: (prev?.n ?? 0) + 1 })
     .returning({ id: dayTemplates.id });
   return row.id;
+}
+
+/** day_templates.name is UNIQUE; pick the first free "Base", "Base 2", "Base 3", … */
+async function uniqueTemplateName(base: string): Promise<string> {
+  const rows = await expoDb.getAllAsync<{ name: string }>(
+    `SELECT name FROM day_templates`
+  );
+  const taken = new Set(rows.map((r) => r.name));
+  if (!taken.has(base)) return base;
+  for (let i = 2; ; i++) {
+    const candidate = `${base} ${i}`;
+    if (!taken.has(candidate)) return candidate;
+  }
 }
 
 export async function renameTemplate(id: number, name: string): Promise<void> {
@@ -132,12 +145,16 @@ export async function deleteTemplate(id: number): Promise<void> {
 
 /** Persist a new rotation order from an ordered list of template ids. */
 export async function reorderTemplates(orderedIds: number[]): Promise<void> {
-  for (let i = 0; i < orderedIds.length; i++) {
-    await db
-      .update(dayTemplates)
-      .set({ rotationOrder: i + 1 })
-      .where(eq(dayTemplates.id, orderedIds[i]));
-  }
+  if (orderedIds.length === 0) return;
+  // Single statement so the DB change listener fires once, after the drag
+  // gesture has settled — writing row-by-row replaces the list mid-gesture and
+  // crashes the reorderable list.
+  const cases = orderedIds.map((_, i) => `WHEN ? THEN ${i + 1}`).join(' ');
+  const ins = orderedIds.map(() => '?').join(',');
+  await expoDb.runAsync(
+    `UPDATE day_templates SET rotation_order = CASE id ${cases} END WHERE id IN (${ins})`,
+    [...orderedIds, ...orderedIds]
+  );
 }
 
 export type TemplateExerciseEditRow = {
@@ -187,12 +204,14 @@ export async function removeTemplateExercise(templateExerciseId: number): Promis
 }
 
 export async function reorderTemplateExercises(orderedIds: number[]): Promise<void> {
-  for (let i = 0; i < orderedIds.length; i++) {
-    await db
-      .update(templateExercises)
-      .set({ sortOrder: i })
-      .where(eq(templateExercises.id, orderedIds[i]));
-  }
+  if (orderedIds.length === 0) return;
+  // See reorderTemplates: one statement -> one change notification, after the gesture.
+  const cases = orderedIds.map((_, i) => `WHEN ? THEN ${i}`).join(' ');
+  const ins = orderedIds.map(() => '?').join(',');
+  await expoDb.runAsync(
+    `UPDATE template_exercises SET sort_order = CASE id ${cases} END WHERE id IN (${ins})`,
+    [...orderedIds, ...orderedIds]
+  );
 }
 
 /** Set target sets / tempo / per-day rest override on a template exercise. */
@@ -415,12 +434,14 @@ export async function removeTemplateMobility(templateMobilityId: number): Promis
 }
 
 export async function reorderTemplateMobility(orderedIds: number[]): Promise<void> {
-  for (let i = 0; i < orderedIds.length; i++) {
-    await db
-      .update(templateMobility)
-      .set({ sortOrder: i })
-      .where(eq(templateMobility.id, orderedIds[i]));
-  }
+  if (orderedIds.length === 0) return;
+  // See reorderTemplates: one statement -> one change notification, after the gesture.
+  const cases = orderedIds.map((_, i) => `WHEN ? THEN ${i}`).join(' ');
+  const ins = orderedIds.map(() => '?').join(',');
+  await expoDb.runAsync(
+    `UPDATE template_mobility SET sort_order = CASE id ${cases} END WHERE id IN (${ins})`,
+    [...orderedIds, ...orderedIds]
+  );
 }
 
 // ---------------------------------------------------------------------------

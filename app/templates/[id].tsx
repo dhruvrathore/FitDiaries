@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import ReorderableList, {
   reorderItems,
   useReorderableDrag,
@@ -30,6 +30,7 @@ export default function TemplateEditor() {
   const templateId = Number(id);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [items, setItems] = useState<TemplateExerciseEditRow[]>([]);
+  const [name, setName] = useState('');
 
   const { data } = useQuery(async () => {
     const [templates, exercises, warm, cool] = await Promise.all([
@@ -42,16 +43,64 @@ export default function TemplateEditor() {
     return { name: t?.name ?? '', exercises, warmCount: warm.length, coolCount: cool.length };
   }, [templateId]);
 
+  // Preserve the user's just-applied local order on a DB refresh (reorder writes
+  // trigger a refetch); only adopt the server order when rows were added/removed,
+  // and refresh each surviving row's content (sets/tempo edited on the sub-screen).
   useEffect(() => {
-    if (data) setItems(data.exercises);
+    if (!data) return;
+    setItems((prev) => {
+      const same =
+        prev.length === data.exercises.length &&
+        prev.every((p) => data.exercises.some((e) => e.id === p.id));
+      if (!same) return data.exercises;
+      const byId = new Map(data.exercises.map((e) => [e.id, e]));
+      return prev.map((p) => byId.get(p.id) ?? p);
+    });
   }, [data]);
+
+  // Depend on data?.name (not data) so an unrelated write mid-typing doesn't wipe
+  // in-progress text — data.name only changes after a successful rename.
+  const persistedName = data?.name;
+  useEffect(() => {
+    if (persistedName !== undefined) setName(persistedName);
+  }, [persistedName]);
+
+  const commitName = useCallback(async () => {
+    const v = name.trim();
+    if (persistedName === undefined || !v || v === persistedName) return;
+    try {
+      await renameTemplate(templateId, v);
+    } catch {
+      Alert.alert('Name taken', 'Another template already uses that name.');
+      setName(persistedName);
+    }
+  }, [name, persistedName, templateId]);
+
+  // Save the name when leaving the screen, so a rename sticks even if the user
+  // taps back without the text input first losing focus. A ref keeps the focus
+  // callback stable (commitName changes each keystroke) so it only fires on unfocus.
+  const commitNameRef = useRef(commitName);
+  commitNameRef.current = commitName;
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        commitNameRef.current();
+      };
+    }, [])
+  );
 
   if (!data) return <Loading />;
 
   const onReorder = ({ from, to }: ReorderableListReorderEvent) => {
-    const next = reorderItems(items, from, to);
+    const dest = Math.max(0, Math.min(to, items.length - 1));
+    // react-native-reorderable-list emits a spurious second event after the drop
+    // with from=-1 (draggedIndex already reset); acting on it reverts the move.
+    if (from < 0 || from >= items.length || from === dest) return;
+    const next = reorderItems(items, from, dest);
     setItems(next);
-    reorderTemplateExercises(next.map((e) => e.id));
+    reorderTemplateExercises(next.map((e) => e.id)).catch((e) =>
+      console.warn('[reorder]', e)
+    );
   };
 
   const confirmDelete = () =>
@@ -73,17 +122,14 @@ export default function TemplateEditor() {
         <ReorderableList
           data={items}
           onReorder={onReorder}
-          keyExtractor={(e) => String(e.id)}
+          keyExtractor={(e, i) => String(e?.id ?? i)}
           contentContainerStyle={{ padding: spacing(4), gap: spacing(2) }}
           ListHeaderComponent={
             <View style={{ gap: spacing(2), marginBottom: spacing(2) }}>
               <Text style={{ color: colors.textFaint, fontSize: font.tiny, letterSpacing: 1 }}>
                 TEMPLATE NAME
               </Text>
-              <NameField
-                value={data.name}
-                onCommit={(v) => v && renameTemplate(templateId, v)}
-              />
+              <NameField value={name} onChangeText={setName} onCommit={commitName} />
               <Text
                 style={{
                   color: colors.textMuted,
@@ -157,16 +203,22 @@ export default function TemplateEditor() {
   );
 }
 
-function NameField({ value, onCommit }: { value: string; onCommit: (v: string) => void }) {
+function NameField({
+  value,
+  onChangeText,
+  onCommit,
+}: {
+  value: string;
+  onChangeText: (v: string) => void;
+  onCommit: () => void;
+}) {
   const { colors } = useTheme();
-  const [text, setText] = useState(value);
-  useEffect(() => setText(value), [value]);
   return (
     <TextInput
-      value={text}
-      onChangeText={setText}
-      onBlur={() => onCommit(text.trim())}
-      onEndEditing={() => onCommit(text.trim())}
+      value={value}
+      onChangeText={onChangeText}
+      onBlur={onCommit}
+      onEndEditing={onCommit}
       style={{
         backgroundColor: colors.card,
         borderWidth: 1,

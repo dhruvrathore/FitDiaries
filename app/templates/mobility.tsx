@@ -44,9 +44,12 @@ export default function TemplateMobilityEditor() {
   if (!data) return <Loading />;
 
   const onReorder = ({ from, to }: ReorderableListReorderEvent) => {
-    const next = reorderItems(items, from, to);
+    const dest = Math.max(0, Math.min(to, items.length - 1));
+    // Ignore the library's spurious post-drop event (from=-1), which reverts the move.
+    if (from < 0 || from >= items.length || from === dest) return;
+    const next = reorderItems(items, from, dest);
     setItems(next);
-    reorderTemplateMobility(next.map((m) => m.id));
+    reorderTemplateMobility(next.map((m) => m.id)).catch((e) => console.warn('[reorder]', e));
   };
 
   return (
@@ -55,7 +58,7 @@ export default function TemplateMobilityEditor() {
         <ReorderableList
           data={items}
           onReorder={onReorder}
-          keyExtractor={(m) => String(m.id)}
+          keyExtractor={(m, i) => String(m?.id ?? i)}
           contentContainerStyle={{ padding: spacing(4), gap: spacing(2.5) }}
           ListHeaderComponent={
             <Text

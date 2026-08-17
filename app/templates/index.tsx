@@ -30,9 +30,12 @@ export default function TemplatesManager() {
   if (!data) return <Loading />;
 
   const onReorder = ({ from, to }: ReorderableListReorderEvent) => {
-    const next = reorderItems(items, from, to);
+    const dest = Math.max(0, Math.min(to, items.length - 1));
+    // Ignore the library's spurious post-drop event (from=-1), which reverts the move.
+    if (from < 0 || from >= items.length || from === dest) return;
+    const next = reorderItems(items, from, dest);
     setItems(next);
-    reorderTemplates(next.map((t) => t.id));
+    reorderTemplates(next.map((t) => t.id)).catch((e) => console.warn('[reorder]', e));
   };
 
   const newTemplate = async () => {
@@ -45,7 +48,7 @@ export default function TemplatesManager() {
       <ReorderableList
         data={items}
         onReorder={onReorder}
-        keyExtractor={(t) => String(t.id)}
+        keyExtractor={(t, i) => String(t?.id ?? i)}
         contentContainerStyle={{ padding: spacing(4), gap: spacing(2.5) }}
         ListHeaderComponent={
           <Text style={{ color: colors.textMuted, fontSize: font.small, marginBottom: spacing(2) }}>
