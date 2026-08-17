@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { router } from 'expo-router';
 
-import { allSetsWithExercise, setsInRange } from '@/db/queries';
+import { allSetsWithExercise, bodyWeightSeries, setsInRange } from '@/db/queries';
 import { useQuery } from '@/db/useQuery';
 import { Body, Card, Caption, Chip, EmptyState, H3, Loading, Row, Screen } from '@/components/ui';
 import { BarChart, HBars, LineChart } from '@/components/Charts';
@@ -14,7 +14,7 @@ import {
   weeklyVolumeSeries,
 } from '@/lib/progress';
 import { PR_LABEL } from '@/lib/metrics';
-import { compactNumber, setLabel } from '@/lib/format';
+import { compactNumber, kg, setLabel } from '@/lib/format';
 import { shortDate, weekRange } from '@/lib/week';
 import { spacing, useTheme } from '@/theme/theme';
 
@@ -25,9 +25,10 @@ export default function Progress() {
   const { data } = useQuery(async () => {
     const now = new Date();
     const { startMs, endMs } = weekRange(now);
-    const [allSets, weekSets] = await Promise.all([
+    const [allSets, weekSets, weights] = await Promise.all([
       allSetsWithExercise(),
       setsInRange(startMs, endMs),
+      bodyWeightSeries(),
     ]);
     return {
       series: weeklyVolumeSeries(allSets, WEEKS, now),
@@ -36,6 +37,7 @@ export default function Progress() {
       ),
       prs: computeAllPREvents(allSets),
       progressions: exerciseProgressions(allSets),
+      weights,
     };
   }, []);
 
@@ -53,7 +55,7 @@ export default function Progress() {
 
   if (!data) return <Loading />;
 
-  const hasAny = data.series.some((s) => s.volume > 0);
+  const hasAny = data.series.some((s) => s.volume > 0) || data.weights.length > 0;
   if (!hasAny)
     return (
       <Screen>
@@ -100,6 +102,23 @@ export default function Progress() {
             value: s.volume,
           }))}
         />
+      </Card>
+
+      {/* Body weight trend */}
+      <Card>
+        <H3>Body weight</H3>
+        <Caption>Recorded at the start of each workout</Caption>
+        {data.weights.length > 1 ? (
+          <>
+            <LineChart values={data.weights.map((w) => w.weight)} />
+            <Row style={{ justifyContent: 'space-between' }}>
+              <Caption>Start: {kg(data.weights[0].weight)} kg</Caption>
+              <Caption>Now: {kg(data.weights[data.weights.length - 1].weight)} kg</Caption>
+            </Row>
+          </>
+        ) : (
+          <Caption>Log your body weight at the start of a workout to see your trend.</Caption>
+        )}
       </Card>
 
       {/* Volume by muscle (this week) */}

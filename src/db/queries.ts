@@ -450,7 +450,8 @@ export async function reorderTemplateMobility(orderedIds: number[]): Promise<voi
 
 export async function createSessionFromTemplate(
   template: TemplateRow,
-  phase: Phase
+  phase: Phase,
+  bodyWeight: number | null = null
 ): Promise<number> {
   const [row] = await db
     .insert(sessions)
@@ -459,6 +460,7 @@ export async function createSessionFromTemplate(
       dayName: template.name,
       phase,
       startedAt: Date.now(),
+      bodyWeight,
     })
     .returning({ id: sessions.id });
 
@@ -489,12 +491,14 @@ export type SessionHeader = {
   startedAt: number;
   finishedAt: number | null;
   notes: string | null;
+  bodyWeight: number | null;
 };
 
 export async function getActiveSession(): Promise<SessionHeader | null> {
   return expoDb.getFirstAsync<SessionHeader>(
     `SELECT id, template_id as templateId, day_name as dayName, phase,
-            started_at as startedAt, finished_at as finishedAt, notes
+            started_at as startedAt, finished_at as finishedAt, notes,
+            body_weight as bodyWeight
      FROM sessions WHERE finished_at IS NULL ORDER BY started_at DESC LIMIT 1`
   );
 }
@@ -502,9 +506,27 @@ export async function getActiveSession(): Promise<SessionHeader | null> {
 export async function getSessionHeader(sessionId: number): Promise<SessionHeader | null> {
   return expoDb.getFirstAsync<SessionHeader>(
     `SELECT id, template_id as templateId, day_name as dayName, phase,
-            started_at as startedAt, finished_at as finishedAt, notes
+            started_at as startedAt, finished_at as finishedAt, notes,
+            body_weight as bodyWeight
      FROM sessions WHERE id = ?`,
     [sessionId]
+  );
+}
+
+/** Most recent recorded body weight (kg), for prefilling the next weigh-in. Null if none. */
+export async function lastBodyWeight(): Promise<number | null> {
+  const row = await expoDb.getFirstAsync<{ bodyWeight: number }>(
+    `SELECT body_weight as bodyWeight FROM sessions
+     WHERE body_weight IS NOT NULL ORDER BY started_at DESC LIMIT 1`
+  );
+  return row?.bodyWeight ?? null;
+}
+
+/** Body-weight weigh-ins over time (kg), oldest first, for the Progress trend chart. */
+export async function bodyWeightSeries(): Promise<{ at: number; weight: number }[]> {
+  return expoDb.getAllAsync<{ at: number; weight: number }>(
+    `SELECT started_at as at, body_weight as weight FROM sessions
+     WHERE body_weight IS NOT NULL ORDER BY started_at ASC`
   );
 }
 
